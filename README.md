@@ -19,7 +19,7 @@ class Metric(Protocol):
 
 Behind the `cluster` method is the K-Means algorithm, as studied in the paper [Clustering with Bregman Divergences](https://www.jmlr.org/papers/volume6/banerjee05b/banerjee05b.pdf). Metrics must be bregman divergences for the K-Means algorithm to be correct.
 
-For small datasets, `cluster` initializes centroids using K-Means++. When the dataset is relatively large, we approximate K-Means++ by sampling from the dataset rather than considering all points as candidates.
+For small datasets, `cluster` initializes centroids using K-Means++. When the dataset is relatively large, we approximate K-Means++ by sampling from the dataset rather than considering all points as candidates. Above a another larger threshold, we sample from the dataset and perform batch K-Means.
 
 If K-Means doesn't convege within `maxiter` iterations, `cluster` will throw a `ConvergenceError`.
 

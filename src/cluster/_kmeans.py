@@ -110,7 +110,7 @@ def _gonzalez(xs: npt.NDArray, k: int, metric: Metric) -> npt.NDArray:
     return ys
 
 
-def _lloyd1(
+def _lloyd(
     xs: npt.NDArray, ys: npt.NDArray, metric: Metric, maxiter: int
 ) -> tuple[npt.NDArray, bool]:
     m, _ = ys.shape
