@@ -5,7 +5,7 @@
 This package provides a `cluster` function with the following signature:
 ```python
 def cluster(
-    xs: npt.NDArray, k: int, metric: Metric | None, maxiter: int = 100
+    xs: npt.NDArray, k: int, metric: Metric = l2, maxiter: int = 100
 ) -> npt.NDArray:
     ...
 ```
