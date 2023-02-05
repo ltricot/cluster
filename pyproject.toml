@@ -1,0 +1,23 @@
+[tool.poetry]
+authors = ["Loan Tricot <ltricot@gmail.com>"]
+description = "Clustering with Bregman Divergences"
+license = "MIT"
+name = "cluster"
+version = "0.1.0"
+
+packages = [
+  {include = "cluster", from = "src"},
+]
+
+[tool.poetry.dependencies]
+numba = "^0.56.4"
+python = "^3.10"
+
+[tool.poetry.dev-dependencies]
+pytest = "^7.2.1"
+mypy = "^0.991"
+black = "^23.1.0"
+
+[build-system]
+build-backend = "poetry.core.masonry.api"
+requires = ["poetry-core>=1.0.0"]
