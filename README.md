@@ -21,7 +21,7 @@ Behind the `cluster` method is the K-Means algorithm, as studied in the paper [C
 
 For small datasets, `cluster` initializes centroids using K-Means++. When the dataset is relatively large, we approximate K-Means++ by sampling from the dataset rather than considering all points as candidates. Above a another larger threshold, we sample from the dataset and perform batch K-Means.
 
-If K-Means doesn't convege within `maxiter` iterations, `cluster` will throw a `ConvergenceError`.
+If K-Means doesn't converge within `maxiter` iterations, `cluster` will throw a `ConvergenceError`.
 
 ## TODO
 
