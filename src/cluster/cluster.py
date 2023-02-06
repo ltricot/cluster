@@ -3,7 +3,7 @@ import numpy as np
 
 from functools import partial
 
-from ._kmeans import _kmeanspp, _kmeanspp_approx, _lloyd, Metric
+from ._kmeans import _kmeanspp, _kmeanspp_approx, _lloyd_exact, _lloyd_approx, Metric
 from .divergences import l2
 
 
@@ -17,7 +17,12 @@ _SAMPLE = 30
 
 
 def cluster(
-    xs: npt.NDArray, k: int, metric: Metric = l2, maxiter: int = 100
+    xs: npt.NDArray,
+    k: int,
+    metric: Metric = l2,
+    maxiter: int = 100,
+    rtol: float | None = None,
+    parallel=True,
 ) -> npt.NDArray:
     init = _kmeanspp
     if len(xs) > _APPROX_KMEANSPP_THRESHOLD:
@@ -29,7 +34,11 @@ def cluster(
         ix = np.random.randint(len(xs), size=_BATCH_THRESHOLD)
         xs = xs[ix]
 
-    ys, converged = _lloyd(xs, ys, metric, maxiter)
+    lloyd = _lloyd_exact
+    if rtol is not None:
+        lloyd = partial(_lloyd_approx, rtol=rtol)
+
+    ys, converged = lloyd(xs, ys, metric, maxiter=maxiter, parallel=parallel)
     if not converged:
         raise ConvergenceError
 

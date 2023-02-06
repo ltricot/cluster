@@ -5,7 +5,12 @@
 This package provides a `cluster` function with the following signature:
 ```python
 def cluster(
-    xs: npt.NDArray, k: int, metric: Metric = l2, maxiter: int = 100
+    xs: npt.NDArray,
+    k: int,
+    metric: Metric = l2,
+    maxiter: int = 100,
+    rtol: float | None = None,
+    parallel=True,
 ) -> npt.NDArray:
     ...
 ```
@@ -21,10 +26,11 @@ Behind the `cluster` method is the K-Means algorithm, as studied in the paper [C
 
 For small datasets, `cluster` initializes centroids using K-Means++. When the dataset is relatively large, we approximate K-Means++ by sampling from the dataset rather than considering all points as candidates. Above a another larger threshold, we sample from the dataset and perform batch K-Means.
 
-If K-Means doesn't converge within `maxiter` iterations, `cluster` will throw a `ConvergenceError`.
+Setting the `parallel` flag does what you expect to do. Parallel K-Means is a linear speedup over single core K-Means, so the default is `parallel=True`.
+
+Setting `rtol=None` means convergence is only established when another iteration wouldn't change the clusters. If `rtol` is given a floating point value, `cluster` will return when the cost decreases by a amount relatively smaller than `rtol`. If K-Means doesn't converge within `maxiter` iterations, `cluster` will throw a `ConvergenceError`.
 
 ## TODO
 
 - [ ] [K-Means|| initialization](https://www.ccs.neu.edu/home/radivojac/classes/2021fallcs6220/hamerly_bookchapter_2014.pdf)
-- [ ] Parallel version of Lloyd's iteration ; for some reason simply asking numba to parallelize the outer loop yields a large slowdown
 - [ ] [Hamerly's triangle inequality optimization](https://www.ccs.neu.edu/home/radivojac/classes/2021fallcs6220/hamerly_bookchapter_2014.pdf) for Bregman divergences which satisfy the triangle inequality (notably l2)
