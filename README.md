@@ -7,13 +7,16 @@ This package provides a `cluster` function with the following signature:
 def cluster(
     xs: npt.NDArray,
     k: int,
+    *,
     metric: Metric = l2,
     maxiter: int = 100,
     rtol: float | None = None,
     parallel=True,
-) -> npt.NDArray:
+) -> tuple[npt.NDArray, npt.NDArray[np.int64]]:
     ...
 ```
+
+The returned tuple contains the centroids and the labels.
 
 The `Metric` type is a protocol defined thus:
 ```python
@@ -29,6 +32,13 @@ For small datasets, `cluster` initializes centroids using K-Means++. When the da
 Setting the `parallel` flag does what you expect to do. Parallel K-Means is a linear speedup over single core K-Means, so the default is `parallel=True`.
 
 Setting `rtol=None` means convergence is only established when another iteration wouldn't change the clusters. If `rtol` is given a floating point value, `cluster` will return when the cost decreases by a amount relatively smaller than `rtol`. If K-Means doesn't converge within `maxiter` iterations, `cluster` will throw a `ConvergenceError`.
+
+## Other methods
+
+The following functions are also accessible:
+- `cluster.exact`: K-Means over the whole dataset
+- `cluster.batch`: K-Means over a fixed subset of the dataset
+- `cluster.minibatch`: K-Means where the batch is sampled at each iteration, rather than at the beginning of the algorithm ; note that `rtol` cannot be None or 0 when calling this method
 
 ## TODO
 

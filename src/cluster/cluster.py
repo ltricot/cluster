@@ -3,7 +3,15 @@ import numpy as np
 
 from functools import partial
 
-from ._kmeans import _kmeanspp, _kmeanspp_approx, _lloyd_exact, _lloyd_approx, Metric
+from ._kmeans import (
+    _kmeanspp,
+    _kmeanspp_approx,
+    _lloyd,
+    _lloyd_minibatch,
+    _label,
+    _label_parallel,
+    Metric,
+)
 from .divergences import l2
 
 
@@ -16,30 +24,121 @@ _APPROX_KMEANSPP_THRESHOLD = 10_000
 _SAMPLE = 30
 
 
-def cluster(
-    xs: npt.NDArray,
-    k: int,
-    metric: Metric = l2,
-    maxiter: int = 100,
-    rtol: float | None = None,
-    parallel=True,
-) -> npt.NDArray:
-    init = _kmeanspp
-    if len(xs) > _APPROX_KMEANSPP_THRESHOLD:
-        init = partial(_kmeanspp_approx, sample=k * _SAMPLE)
+class _Cluster:
+    @staticmethod
+    def __call__(
+        xs: npt.NDArray,
+        k: int,
+        *,
+        metric: Metric = l2,
+        maxiter: int = 100,
+        rtol: float | None = None,
+        parallel=True,
+    ) -> tuple[npt.NDArray, npt.NDArray[np.int64]]:
+        kws = dict(metric=metric, maxiter=maxiter, rtol=rtol, parallel=parallel)
 
-    ys = init(xs, k, metric)
+        if len(xs) > _BATCH_THRESHOLD:
+            return _Cluster.batch(xs, k, batch=_BATCH_THRESHOLD, **kws)
 
-    if len(xs) > _BATCH_THRESHOLD:
-        ix = np.random.randint(len(xs), size=_BATCH_THRESHOLD)
-        xs = xs[ix]
+        return _Cluster.exact(xs, k, **kws)
 
-    lloyd = _lloyd_exact
-    if rtol is not None:
-        lloyd = partial(_lloyd_approx, rtol=rtol)
+    @staticmethod
+    def _init(xs: npt.NDArray, k: int, /, metric: Metric):
+        init = _kmeanspp
+        if len(xs) > _APPROX_KMEANSPP_THRESHOLD:
+            init = partial(_kmeanspp_approx, sample=k * _SAMPLE)
 
-    ys, converged = lloyd(xs, ys, metric, maxiter=maxiter, parallel=parallel)
-    if not converged:
-        raise ConvergenceError
+        return init(xs, k, metric)
 
-    return ys
+    @staticmethod
+    def exact(
+        xs: npt.NDArray,
+        k: int,
+        *,
+        metric: Metric = l2,
+        maxiter: int = 100,
+        rtol: float | None = None,
+        parallel=True,
+    ):
+        ys = _Cluster._init(xs, k, metric)
+
+        if rtol is None:
+            rtol = 0.0
+        ys, labels, converged = _lloyd(
+            xs, ys, metric, maxiter=maxiter, rtol=np.float64(rtol), parallel=parallel
+        )
+        if not converged:
+            raise ConvergenceError
+
+        return ys, labels
+
+    @staticmethod
+    def batch(
+        xs: npt.NDArray,
+        k: int,
+        *,
+        batch: int,
+        metric: Metric = l2,
+        maxiter: int = 100,
+        rtol: float | None = None,
+        parallel=True,
+    ):
+        ys = _Cluster._init(xs, k, metric)
+
+        ix = np.random.randint(len(xs), size=batch)
+        _xs = xs[ix]
+
+        if rtol is None:
+            rtol = 0.0
+        ys, _, converged = _lloyd(
+            _xs, ys, metric, maxiter=maxiter, rtol=np.float64(rtol), parallel=parallel
+        )
+        if not converged:
+            raise ConvergenceError
+
+        label = _label
+        if parallel:
+            label = _label_parallel
+
+        labels = label(xs, ys, metric)
+        return ys, labels
+
+    @staticmethod
+    def minibatch(
+        xs: npt.NDArray,
+        k: int,
+        *,
+        batch: int,
+        metric: Metric = l2,
+        maxiter: int = 100,
+        rtol: float | None = None,
+        parallel=True,
+    ):
+        ys = _Cluster._init(xs, k, metric)
+
+        if rtol is None or rtol == 0.0:
+            raise ValueError(
+                f"rtol value should be > 0 for minibatch K-Means, but is {rtol}"
+            )
+
+        ys, _, converged = _lloyd_minibatch(
+            xs,
+            ys,
+            metric,
+            maxiter=maxiter,
+            rtol=np.float64(rtol),
+            batch=batch,
+            parallel=parallel,
+        )
+        if not converged:
+            raise ConvergenceError
+
+        label = _label
+        if parallel:
+            label = _label_parallel
+
+        labels = label(xs, ys, metric)
+        return ys, labels
+
+
+cluster = _Cluster()

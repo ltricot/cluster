@@ -19,6 +19,10 @@ def _label_default(
     labels = np.empty(n, dtype=np.int64)
     cost = np.float64(0.0)
 
+    # labels is accumulated into at disjoint indices
+    # cost is a parallel reduction variable & is handled by
+    # numba's parallel semantics
+
     for i in prange(n):
         mj, md = 0, np.inf
         for j in range(m):
@@ -32,7 +36,7 @@ def _label_default(
     return labels, cost
 
 
-_label = njit(_label_default)
+_label = njit()(_label_default)
 _label_parallel = njit(parallel=True)(_label_default)
 
 
@@ -118,43 +122,14 @@ def _gonzalez(xs: npt.NDArray, k: int, metric: Metric) -> npt.NDArray:
     return ys
 
 
-def _lloyd_exact(
-    xs: npt.NDArray, ys: npt.NDArray, metric: Metric, maxiter: int, parallel=True
-) -> tuple[npt.NDArray, bool]:
-    label = _label
-    if parallel:
-        label = _label_parallel
-
-    m, _ = ys.shape
-    ys = np.copy(ys)
-
-    labels, _ = label(xs, ys, metric)
-    old = labels
-
-    for _ in range(maxiter):
-        for j in range(m):
-            ys[j] = np.mean(xs[labels == j], axis=0)
-
-        old[:] = labels
-        labels, _ = label(xs, ys, metric)
-
-        if np.array_equal(labels, old):
-            return ys, True
-
-    return ys, False
-
-
-_eps = np.finfo(np.float64).eps
-
-
-def _lloyd_approx(
+def _lloyd(
     xs: npt.NDArray,
     ys: npt.NDArray,
     metric: Metric,
     maxiter: int,
     rtol: np.float64,
     parallel=True,
-) -> tuple[npt.NDArray, bool]:
+) -> tuple[npt.NDArray, npt.NDArray[np.int64], bool]:
     label = _label
     if parallel:
         label = _label_parallel
@@ -171,7 +146,41 @@ def _lloyd_approx(
         old = cost
         labels, cost = label(xs, ys, metric)
 
-        if np.abs(cost - old) / (old + _eps) < rtol:
-            return ys, True
+        if np.abs(cost - old) <= rtol * old:
+            return ys, labels, True
 
-    return ys, False
+    return ys, labels, False
+
+
+def _lloyd_minibatch(
+    xs: npt.NDArray,
+    ys: npt.NDArray,
+    metric: Metric,
+    maxiter: int,
+    rtol: np.float64,
+    batch: int,
+    parallel=True,
+) -> tuple[npt.NDArray, npt.NDArray[np.int64], bool]:
+    label = _label
+    if parallel:
+        label = _label_parallel
+
+    n, _ = xs.shape
+    m, _ = ys.shape
+    ys = np.copy(ys)
+
+    _xs = xs[np.random.randint(n, size=batch)]
+    labels, cost = label(_xs, ys, metric)
+
+    for _ in range(maxiter):
+        for j in range(m):
+            ys[j] = np.mean(_xs[labels == j], axis=0)
+
+        old = cost
+        _xs = xs[np.random.randint(n, size=batch)]
+        labels, cost = label(_xs, ys, metric)
+
+        if np.abs(cost - old) <= rtol * old:
+            return ys, labels, True
+
+    return ys, labels, False
