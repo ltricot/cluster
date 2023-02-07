@@ -5,6 +5,9 @@ from numba import njit, prange  # type: ignore
 from typing import Protocol
 
 
+_CACHE = True
+
+
 class Metric(Protocol):
     def __call__(self, x: npt.NDArray, y: npt.NDArray) -> float:
         ...
@@ -31,16 +34,16 @@ def _label_default(
                 mj, md = j, d
 
         labels[i] = mj
-        cost += md ** 2
+        cost += md / n
 
     return labels, cost
 
 
-_label = njit()(_label_default)
-_label_parallel = njit(parallel=True)(_label_default)
+_label = njit(cache=_CACHE)(_label_default)
+_label_parallel = njit(cache=_CACHE, parallel=True)(_label_default)
 
 
-@njit
+@njit(cache=_CACHE)
 def _random_choice(xs: npt.NDArray, w: npt.NDArray) -> npt.NDArray:
     at = np.random.rand() * w.sum()
 
@@ -52,7 +55,7 @@ def _random_choice(xs: npt.NDArray, w: npt.NDArray) -> npt.NDArray:
     return xs[-1]
 
 
-@njit
+@njit(cache=_CACHE)
 def _kmeanspp(xs: npt.NDArray, k: int, metric: Metric) -> npt.NDArray:
     n, p = xs.shape
 
@@ -65,14 +68,14 @@ def _kmeanspp(xs: npt.NDArray, k: int, metric: Metric) -> npt.NDArray:
             m = np.inf
             for j in range(l):
                 m = min(m, metric(xs[i], ys[j]))
-            prob[i] = m ** 2
+            prob[i] = m
 
         ys[l] = _random_choice(xs, prob)
 
     return ys
 
 
-@njit
+@njit(cache=_CACHE)
 def _kmeanspp_approx(
     xs: npt.NDArray, k: int, metric: Metric, sample: int
 ) -> npt.NDArray:
@@ -92,14 +95,57 @@ def _kmeanspp_approx(
             m = np.inf
             for j in range(l):
                 m = min(m, metric(xs[i], ys[j]))
-            prob[s] = m ** 2
+            prob[s] = m
 
         ys[l] = _random_choice(_xs, prob)
 
     return ys
 
+@njit(cache=_CACHE, parallel=True)
+def _kmeanspar_init(
+    xs: npt.NDArray, k: int, metric: Metric, sample: int
+) -> npt.NDArray:
+    # this seems to be slower than sampled kmeans++, and
+    # not particularly better even when the sample size is large
 
-@njit
+    n, p = xs.shape
+    l = 2 * k
+
+    cs = np.empty((1 + 5 * l, p))
+    cs[0] = xs[np.random.randint(n)]
+
+    for r in range(5):
+        for f in prange(l):
+            prob = np.empty(sample, dtype=np.float64)
+            _xs = np.empty((sample, p), dtype=xs.dtype)
+
+            for s in range(sample):
+                i = np.random.randint(n)
+                _xs[s] = xs[i]
+
+                m = np.inf
+                for j in range(1 + l * r):
+                    m = min(m, metric(xs[i], cs[j]))
+                prob[s] = m
+
+            cs[1 + l * r + f] = _random_choice(_xs, prob)
+
+    return cs
+
+
+def _kmeanspar(xs: npt.NDArray, k: int, metric: Metric, sample: int) -> npt.NDArray:
+    cs = _kmeanspar_init(xs, k, metric, sample)
+
+    ys = _kmeanspp(cs, k, metric)
+    ys, _, converged = _lloyd_exact(cs, ys, metric, maxiter=10 * k, parallel=False)
+
+    if not converged:
+        raise RuntimeError
+
+    return ys
+
+
+@njit(cache=_CACHE)
 def _gonzalez(xs: npt.NDArray, k: int, metric: Metric) -> npt.NDArray:
     n, p = xs.shape
 
@@ -122,7 +168,41 @@ def _gonzalez(xs: npt.NDArray, k: int, metric: Metric) -> npt.NDArray:
     return ys
 
 
-def _lloyd(
+def _lloyd_exact(
+    xs: npt.NDArray,
+    ys: npt.NDArray,
+    metric: Metric,
+    maxiter: int,
+    parallel=True,
+) -> tuple[npt.NDArray, npt.NDArray[np.int64], bool]:
+    label = _label
+    if parallel:
+        label = _label_parallel
+
+    m, _ = ys.shape
+    ys = np.copy(ys)
+
+    labels, _ = label(xs, ys, metric)
+
+    for _ in range(maxiter):
+        for j in range(m):
+            slc = xs[labels == j]
+            if len(slc) > 0:
+                ys[j] = np.mean(slc, axis=0)
+
+        if len(slb := set(labels)) <= len(ys):
+            ys = ys[list(slb)]
+
+        old = labels
+        labels, _ = label(xs, ys, metric)
+
+        if np.array_equal(old, labels):
+            return ys, labels, True
+
+    return ys, labels, False
+
+
+def _lloyd_rtol(
     xs: npt.NDArray,
     ys: npt.NDArray,
     metric: Metric,
@@ -141,7 +221,12 @@ def _lloyd(
 
     for _ in range(maxiter):
         for j in range(m):
-            ys[j] = np.mean(xs[labels == j], axis=0)
+            slc = xs[labels == j]
+            if len(slc) > 0:
+                ys[j] = np.mean(slc, axis=0)
+
+        if len(slb := set(labels)) <= len(ys):
+            ys = ys[list(slb)]
 
         old = cost
         labels, cost = label(xs, ys, metric)
@@ -174,7 +259,12 @@ def _lloyd_minibatch(
 
     for _ in range(maxiter):
         for j in range(m):
-            ys[j] = np.mean(_xs[labels == j], axis=0)
+            slc = xs[labels == j]
+            if len(slc) > 0:
+                ys[j] = np.mean(slc, axis=0)
+
+        if len(slb := set(labels)) <= len(ys):
+            ys = ys[list(slb)]
 
         old = cost
         _xs = xs[np.random.randint(n, size=batch)]

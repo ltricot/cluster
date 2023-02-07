@@ -3,17 +3,20 @@ import numpy as np
 from numba import njit  # type: ignore
 
 
-@njit(nogil=True)
+_CACHE = True
+
+
+@njit(cache=_CACHE, nogil=True)
 def l2(x: npt.NDArray, y: npt.NDArray) -> np.float64:
     c = np.float64(0)
 
     for i in range(len(x)):
         c += (x[i] - y[i]) ** 2
 
-    return np.sqrt(c)
+    return c
 
 
-@njit(nogil=True)
+@njit(cache=_CACHE, nogil=True)
 def emd1(x: npt.NDArray, y: npt.NDArray) -> np.float64:
     carry, cost = 0.0, np.float64(0.0)
 

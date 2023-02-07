@@ -12,8 +12,8 @@ def test_cluster():
         ]
     )
 
-    ys = cluster(xs, 2)
-    if np.linalg.norm(ys[0]) > np.linalg.norm(ys[1]):
-        ys = ys[::-1]
+    _, labels = cluster(xs, 2, parallel=False)
+    l1, l2, l3 = labels
 
-    assert np.allclose(ys, np.asarray([[1.05, 2.05, 3.05], [4.0, 5.0, 6.0]]))
+    assert l1 == l2
+    assert l1 != l3

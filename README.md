@@ -42,5 +42,4 @@ The following functions are also accessible:
 
 ## TODO
 
-- [ ] [K-Means|| initialization](https://www.ccs.neu.edu/home/radivojac/classes/2021fallcs6220/hamerly_bookchapter_2014.pdf)
 - [ ] [Hamerly's triangle inequality optimization](https://www.ccs.neu.edu/home/radivojac/classes/2021fallcs6220/hamerly_bookchapter_2014.pdf) for Bregman divergences which satisfy the triangle inequality (notably l2)

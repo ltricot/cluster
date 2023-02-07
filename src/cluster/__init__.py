@@ -1,1 +1,1 @@
-from .cluster import cluster, ConvergenceError
+from .cluster import cluster, cost, ConvergenceError
