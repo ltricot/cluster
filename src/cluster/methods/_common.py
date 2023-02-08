@@ -2,10 +2,11 @@ from numba import njit, prange
 import numpy.typing as npt
 import numpy as np
 
+from .._settings import CACHE
 from ..metrics import Metric
 
 
-@njit(parallel=True)
+@njit(cache=CACHE, parallel=True)
 def _init_labels(xs: npt.NDArray, ys: npt.NDArray, metric: Metric):
     n, _ = xs.shape
     k, _ = ys.shape
@@ -24,7 +25,7 @@ def _init_labels(xs: npt.NDArray, ys: npt.NDArray, metric: Metric):
     return labels
 
 
-@njit
+@njit(cache=CACHE)
 def _init_ys(xs: npt.NDArray, k: int, labels: npt.NDArray):
     n, d = xs.shape
 
@@ -38,7 +39,7 @@ def _init_ys(xs: npt.NDArray, k: int, labels: npt.NDArray):
     return _ys, _ns
 
 
-@njit
+@njit(cache=CACHE)
 def _update_ys(
     xs: npt.NDArray,
     _ys: npt.NDArray,
@@ -60,7 +61,7 @@ def _update_ys(
     return chg
 
 
-@njit(parallel=True)
+@njit(cache=CACHE, parallel=True)
 def _pdist(ys: npt.NDArray, metric: Metric, out: npt.NDArray):
     k, _ = ys.shape
 

@@ -8,11 +8,8 @@ from .._settings import CACHE
 from ._common import _init_ys, _update_ys
 
 
-# I hope I made a mistake because otherwise this algorithm SUCKS
-
-
 @njit(cache=CACHE, parallel=True)
-def _pdist_elkan(ys: npt.NDArray, metric: Metric, pdist: npt.NDArray, s: npt.NDArray):
+def _pdist_hamerly(ys: npt.NDArray, metric: Metric, pdist: npt.NDArray, s: npt.NDArray):
     k, _ = ys.shape
 
     for i in prange(k):
@@ -28,62 +25,65 @@ def _pdist_elkan(ys: npt.NDArray, metric: Metric, pdist: npt.NDArray, s: npt.NDA
 
 
 @njit(cache=CACHE, parallel=True)
-def _init_labels_elkan(xs: npt.NDArray, ys: npt.NDArray, metric: Metric):
+def _init_labels_hamerly(xs: npt.NDArray, ys: npt.NDArray, metric: Metric):
     n, _ = xs.shape
     k, _ = ys.shape
 
     labels = np.empty(n, dtype=np.int64)
     upper = np.empty(n, dtype=xs.dtype)
-    lower = np.empty((n, k), dtype=xs.dtype)
+    lower = np.empty(n, dtype=xs.dtype)
 
     for i in prange(n):
-        mj, md = 0, np.inf
+        mj, md, lmd = 0, np.inf, np.inf
         for j in range(k):
             d = metric(xs[i], ys[j])
-            lower[i, j] = d
-
             if d < md:
-                mj, md = j, d
+                mj, md, lmd = j, d, md
+            elif d < lmd:
+                lmd = d
 
         labels[i] = mj
         upper[i] = md
+        lower[i] = lmd
 
     return labels, upper, lower
 
 
 @njit(cache=CACHE, parallel=True)
-def _label_elkan(
+def _label_hamerly(
     xs: npt.NDArray,
     ys: npt.NDArray,
     metric: Metric,
     labels: npt.NDArray,
     upper: npt.NDArray,
     lower: npt.NDArray,
-    pdist: npt.NDArray,
     s: npt.NDArray,
 ):
     n, _ = xs.shape
     k, _ = ys.shape
 
     for i in prange(n):
-        li, ui = labels[i], upper[i]
+        li = labels[i]
 
-        if 2 * ui <= s[li]:
+        m = max(lower[i], s[li] / 2)
+        if upper[i] < m:
             continue
 
-        mj, md = 0, np.inf
-        for j in range(k):
-            if ui <= lower[i, j] or 2 * ui <= pdist[li, j]:
-                continue
+        upper[i] = metric(xs[i], ys[li])
+        if upper[i] < m:
+            continue
 
+        mj, md, lmd = 0, np.inf, np.inf
+        for j in range(k):
             d = metric(xs[i], ys[j])
             if d < md:
-                mj, md = j, d
-
-            lower[i, j] = d
+                mj, md, lmd = j, d, md
+            elif d < lmd:
+                lmd = d
 
         labels[i] = mj
         upper[i] = md
+        lower[i] = lmd
 
 
 @njit(cache=CACHE, parallel=True)
@@ -100,23 +100,23 @@ def _update_bounds(
     zero = np.zeros(d, dtype=dys.dtype)
     norm = np.empty(k, dtype=dys.dtype)
 
+    delta = 0.0
     for j in prange(k):
         norm[j] = metric(dys[j], zero)
+        delta = max(delta, norm[j])
 
     for i in prange(n):
         upper[i] += norm[labels[i]]
-
-        for j in range(k):
-            lower[i] -= norm[j]
+        lower[i] -= delta
 
 
 @njit(cache=CACHE)
-def elkan(xs: npt.NDArray, ys: npt.NDArray, metric: Metric, maxiter: int):
+def hamerly(xs: npt.NDArray, ys: npt.NDArray, metric: Metric, maxiter: int):
     n, _ = xs.shape
     k, _ = ys.shape
 
     # label
-    move, upper, lower = _init_labels_elkan(xs, ys, metric)
+    move, upper, lower = _init_labels_hamerly(xs, ys, metric)
     labels = np.empty(n, dtype=np.int64)
     pdist = np.zeros((k, k), dtype=xs.dtype)
     s = np.empty(k, dtype=xs.dtype)
@@ -130,8 +130,8 @@ def elkan(xs: npt.NDArray, ys: npt.NDArray, metric: Metric, maxiter: int):
 
     for _ in range(maxiter):
         labels[:] = move
-        _pdist_elkan(ys, metric, pdist, s)
-        _label_elkan(xs, ys, metric, move, upper, lower, pdist, s)
+        _pdist_hamerly(ys, metric, pdist, s)
+        _label_hamerly(xs, ys, metric, move, upper, lower, s)
 
         if not _update_ys(xs, _ys_cp, _ns_cp, move, labels):
             break
