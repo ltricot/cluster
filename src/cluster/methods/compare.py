@@ -53,8 +53,8 @@ def compare(xs: npt.NDArray, ys: npt.NDArray, metric: Metric, maxiter: int):
         _label_compare(xs, ys, metric, pdist, move)
 
         if not _update_ys(xs, _ys, _ns, move, labels):
-            break
+            return ys, labels, True
 
         ys[:] = _ys / _ns.reshape(-1, 1)
 
-    return labels
+    return ys, labels, False

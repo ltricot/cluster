@@ -134,7 +134,7 @@ def hamerly(xs: npt.NDArray, ys: npt.NDArray, metric: Metric, maxiter: int):
         _label_hamerly(xs, ys, metric, move, upper, lower, s)
 
         if not _update_ys(xs, _ys_cp, _ns_cp, move, labels):
-            break
+            return ys, labels, True
 
         dys = (_ys_cp / _ns_cp.reshape(-1, 1)) - ys
         _update_bounds(dys, move, upper, lower, metric)
@@ -143,4 +143,4 @@ def hamerly(xs: npt.NDArray, ys: npt.NDArray, metric: Metric, maxiter: int):
         _ns[:] = _ns_cp
         ys += dys
 
-    return labels
+    return ys, labels, False
