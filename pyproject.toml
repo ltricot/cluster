@@ -17,6 +17,7 @@ python = "^3.10"
 pytest = "^7.2.1"
 mypy = "^0.991"
 black = "^23.1.0"
+hypothesis = "^6.67.1"
 
 [build-system]
 build-backend = "poetry.core.masonry.api"
