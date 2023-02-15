@@ -1,8 +1,11 @@
 import numpy.typing as npt
 import numpy as np
 
+from typing import Protocol
+from typing import Optional
+
 from .methods.initialization import mckmeanspp
-from .methods import hamerly2
+from .methods import hamerly2, sort
 from . import metrics
 
 
@@ -13,18 +16,37 @@ class ConvergenceError(RuntimeError):
     ...
 
 
+class Method:
+    def __call__(
+        self, xs: npt.NDArray, ys: npt.NDArray, metric: metrics.Metric, maxiter: int
+    ) -> tuple[npt.NDArray, npt.NDArray, bool]:
+        raise NotImplementedError
+
+
 def cluster(
-    xs: npt.NDArray, k: int, metric: metrics.Metric = metrics.l2, maxiter=MAXITER
+    xs: npt.NDArray,
+    k: int,
+    metric: metrics.Metric = metrics.l2,
+    method: Optional[Method] = None,
+    maxiter=MAXITER,
 ):
     n, d = xs.shape
 
+    # hardly a sure thing
     sample = 10 * np.log(n) * np.sqrt(10 + d) * k
     sample = min(sample, 300)
     sample = max(sample, 30)
     ys = mckmeanspp(xs, k, metric, sample=sample)
 
-    ys, labels, converged = hamerly2(xs, ys, metric, maxiter=maxiter)
+    # yet again, hardly a sure thing
+    if method is None:
+        _method = hamerly2
+        if k >= 32:
+            _method = sort
+    else:
+        _method = method
 
+    ys, labels, converged = _method(xs, ys, metric, maxiter=maxiter)
     if not converged:
         raise ConvergenceError
 

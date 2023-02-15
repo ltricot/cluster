@@ -4,12 +4,14 @@ import numpy.typing as npt
 import numpy as np
 
 from ..metrics import Metric
-from .._settings import CACHE
+from .._settings import CACHE, PARALLEL
 from ._common import _init_ys, _update_ys
 
 
-@njit(cache=CACHE, parallel=True)
-def _pdist_hamerly(ys: npt.NDArray, metric: Metric, pdist: npt.NDArray, s: npt.NDArray):
+@njit(cache=CACHE, parallel=PARALLEL)
+def _pdist_hamerly2(
+    ys: npt.NDArray, metric: Metric, pdist: npt.NDArray, s: npt.NDArray
+):
     k, _ = ys.shape
 
     for i in prange(k):
@@ -24,8 +26,8 @@ def _pdist_hamerly(ys: npt.NDArray, metric: Metric, pdist: npt.NDArray, s: npt.N
         s[i] = md
 
 
-@njit(cache=CACHE, parallel=True)
-def _init_labels_hamerly(xs: npt.NDArray, ys: npt.NDArray, metric: Metric):
+@njit(cache=CACHE, parallel=PARALLEL)
+def _init_labels_hamerly2(xs: npt.NDArray, ys: npt.NDArray, metric: Metric):
     n, _ = xs.shape
     k, _ = ys.shape
 
@@ -49,8 +51,8 @@ def _init_labels_hamerly(xs: npt.NDArray, ys: npt.NDArray, metric: Metric):
     return labels, upper, lower
 
 
-@njit(cache=CACHE, parallel=True)
-def _label_hamerly(
+@njit(cache=CACHE, parallel=PARALLEL)
+def _label_hamerly2(
     xs: npt.NDArray,
     ys: npt.NDArray,
     metric: Metric,
@@ -86,7 +88,7 @@ def _label_hamerly(
         lower[i] = lmd
 
 
-@njit(cache=CACHE, parallel=True)
+@njit(cache=CACHE, parallel=PARALLEL)
 def _update_bounds(
     dys: npt.NDArray,
     labels: npt.NDArray,
@@ -111,12 +113,12 @@ def _update_bounds(
 
 
 @njit(cache=CACHE)
-def hamerly(xs: npt.NDArray, ys: npt.NDArray, metric: Metric, maxiter: int):
+def hamerly2(xs: npt.NDArray, ys: npt.NDArray, metric: Metric, maxiter: int):
     n, _ = xs.shape
     k, _ = ys.shape
 
     # label
-    move, upper, lower = _init_labels_hamerly(xs, ys, metric)
+    move, upper, lower = _init_labels_hamerly2(xs, ys, metric)
     labels = np.empty(n, dtype=np.int64)
     pdist = np.zeros((k, k), dtype=xs.dtype)
     s = np.empty(k, dtype=xs.dtype)
@@ -130,8 +132,8 @@ def hamerly(xs: npt.NDArray, ys: npt.NDArray, metric: Metric, maxiter: int):
 
     for _ in range(maxiter):
         labels[:] = move
-        _pdist_hamerly(ys, metric, pdist, s)
-        _label_hamerly(xs, ys, metric, move, upper, lower, s)
+        _pdist_hamerly2(ys, metric, pdist, s)
+        _label_hamerly2(xs, ys, metric, move, upper, lower, s)
 
         if not _update_ys(xs, _ys_cp, _ns_cp, move, labels):
             return ys, labels, True

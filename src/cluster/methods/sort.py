@@ -3,11 +3,11 @@ import numpy.typing as npt
 import numpy as np
 
 from ..metrics import Metric
-from .._settings import CACHE
+from .._settings import CACHE, PARALLEL
 from ._common import _init_labels, _init_ys, _update_ys
 
 
-@njit(cache=CACHE, parallel=True)
+@njit(cache=CACHE, parallel=PARALLEL)
 def _pdist_sort(ys: npt.NDArray, metric: Metric, pdist: npt.NDArray, sort: npt.NDArray):
     k, _ = ys.shape
 
@@ -20,7 +20,7 @@ def _pdist_sort(ys: npt.NDArray, metric: Metric, pdist: npt.NDArray, sort: npt.N
         sort[i] = np.argsort(pdist[i])
 
 
-@njit(cache=CACHE, parallel=True)
+@njit(cache=CACHE, parallel=PARALLEL)
 def _label_sort(
     xs: npt.NDArray,
     ys: npt.NDArray,
