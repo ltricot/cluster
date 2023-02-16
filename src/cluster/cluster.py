@@ -5,7 +5,7 @@ from typing import Protocol
 from typing import Optional
 
 from .methods.initialization import mckmeanspp
-from .methods import hamerly2, sort
+from .methods import hamerly2, compare
 from . import metrics
 
 
@@ -16,11 +16,11 @@ class ConvergenceError(RuntimeError):
     ...
 
 
-class Method:
+class Method(Protocol):
     def __call__(
         self, xs: npt.NDArray, ys: npt.NDArray, metric: metrics.Metric, maxiter: int
     ) -> tuple[npt.NDArray, npt.NDArray, bool]:
-        raise NotImplementedError
+        ...
 
 
 def cluster(
@@ -29,7 +29,7 @@ def cluster(
     metric: metrics.Metric = metrics.l2,
     method: Optional[Method] = None,
     maxiter=MAXITER,
-):
+) -> tuple[npt.NDArray, npt.NDArray]:
     n, d = xs.shape
 
     # hardly a sure thing
@@ -41,8 +41,8 @@ def cluster(
     # yet again, hardly a sure thing
     if method is None:
         _method = hamerly2
-        if k >= 32:
-            _method = sort
+        if n / k <= 128:
+            _method = compare
     else:
         _method = method
 
